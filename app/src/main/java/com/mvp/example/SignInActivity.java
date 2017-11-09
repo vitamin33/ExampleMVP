@@ -1,15 +1,12 @@
 package com.mvp.example;
 
-import android.app.Activity;
 import android.os.Bundle;
-import android.support.annotation.Nullable;
 
 /**
  * Created by vitalii_serbyn on 10/25/17.
  */
 
 import android.content.Intent;
-import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -29,6 +26,7 @@ import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.mvp.example.messages.MainActivity;
 
 public class SignInActivity extends AppCompatActivity implements
         GoogleApiClient.OnConnectionFailedListener, View.OnClickListener {
