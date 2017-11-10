@@ -23,6 +23,7 @@ import com.mvp.example.data.source.TasksRepository;
 import com.mvp.example.data.source.local.TasksLocalDataSource;
 import com.mvp.example.data.source.remote.TasksRemoteDataSource;
 import com.mvp.example.messages.domain.usecase.AddMessage;
+import com.mvp.example.messages.domain.usecase.CheckFirebaseAuth;
 import com.mvp.example.messages.domain.usecase.GetMessages;
 
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -48,5 +49,9 @@ public class Injection {
 
      public static AddMessage provideSaveTask(Context context) {
         return new AddMessage(Injection.provideTasksRepository(context));
+    }
+
+    public static CheckFirebaseAuth provideCheckFirebaseAuth() {
+        return new CheckFirebaseAuth();
     }
 }

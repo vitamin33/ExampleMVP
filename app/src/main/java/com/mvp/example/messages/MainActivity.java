@@ -36,6 +36,7 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+import com.mvp.example.Injection;
 import com.mvp.example.R;
 import com.mvp.example.SignInActivity;
 import com.mvp.example.messages.domain.model.FriendlyMessage;
@@ -46,25 +47,75 @@ import java.util.List;
 import de.hdodenhof.circleimageview.CircleImageView;
 
 public class MainActivity extends AppCompatActivity
-        implements GoogleApiClient.OnConnectionFailedListener {
+        implements GoogleApiClient.OnConnectionFailedListener, TasksContract.View {
 
     public static final String FRIENDLY_MSG_LENGTH = "friendly_msg_length";
 
-    /**
-     * ATTENTION: This was auto-generated to implement the App Indexing API.
-     * See https://g.co/AppIndexing/AndroidStudio for more information.
-     */
-    public Action getIndexApiAction() {
-        return Actions.newView("Main", "http://[ENTER-YOUR-URL-HERE]");
+    @Override
+    public void setPresenter(TasksContract.Presenter presenter) {
+
     }
 
     @Override
-    public void onStop() {
+    public void setLoadingIndicator(boolean active) {
+        if (active) {
+            mProgressBar.setVisibility(View.VISIBLE);
+        } else {
+            mProgressBar.setVisibility(View.GONE);
+        }
+    }
 
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        FirebaseUserActions.getInstance().end(getIndexApiAction());
-        super.onStop();
+    @Override
+    public void showTasks(List<FriendlyMessage> tasks) {
+        initAdapter(tasks);
+    }
+
+    @Override
+    public void showAddTask() {
+        mMessageEditText.setText("");
+    }
+
+    @Override
+    public void showLoadingTasksError() {
+
+    }
+
+    @Override
+    public void showAddMessageError() {
+
+    }
+
+    @Override
+    public void showNoTasks() {
+
+    }
+
+    @Override
+    public void showSuccessfullySavedMessage() {
+        mMessageEditText.setText("");
+    }
+
+    @Override
+    public void showFirebaseActiveUser(String username, String photoUrl) {
+        mUsername = username;
+        mPhotoUrl = photoUrl;
+
+        initViews();
+
+        mPresenter.loadMessages(true);
+
+
+    }
+
+    @Override
+    public void showNoActiveFirebaseUser() {
+        startActivity(new Intent(this, SignInActivity.class));
+        finish();
+    }
+
+    @Override
+    public boolean isActive() {
+        return !isFinishing();
     }
 
     public static class MessageViewHolder extends RecyclerView.ViewHolder {
@@ -83,18 +134,13 @@ public class MainActivity extends AppCompatActivity
     }
 
     private static final String TAG = "MainActivity";
-    public static final String MESSAGES_CHILD = "messages";
-    private static final int REQUEST_INVITE = 1;
-    private static final int REQUEST_IMAGE = 2;
-    private static final String LOADING_IMAGE_URL = "https://www.google.com/images/spin-32.gif";
     public static final int DEFAULT_MSG_LENGTH_LIMIT = 10;
     public static final String ANONYMOUS = "anonymous";
-    private static final String MESSAGE_SENT_EVENT = "message_sent";
+
     private String mUsername;
     private String mPhotoUrl;
     private SharedPreferences mSharedPreferences;
     private GoogleApiClient mGoogleApiClient;
-    private static final String MESSAGE_URL = "http://friendlychat.firebase.google.com/message/";
 
     private Button mSendButton;
     private RecyclerView mMessageRecyclerView;
@@ -103,15 +149,9 @@ public class MainActivity extends AppCompatActivity
     private EditText mMessageEditText;
     private ImageView mAddMessageImageView;
 
-    // Firebase instance variables
-    private FirebaseAuth mFirebaseAuth;
-    private FirebaseUser mFirebaseUser;
+    private TasksPresenter mPresenter;
 
-    // Firebase instance variables
-    private DatabaseReference mFirebaseDatabaseReference;
     private MessagesAdapter mFirebaseAdapter;
-
-    // Firebase instance variables
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -126,29 +166,19 @@ public class MainActivity extends AppCompatActivity
                 .addApi(Auth.GOOGLE_SIGN_IN_API)
                 .build();
 
-        // Initialize Firebase Auth
-        mFirebaseAuth = FirebaseAuth.getInstance();
-        mFirebaseUser = mFirebaseAuth.getCurrentUser();
-        if (mFirebaseUser == null) {
-            // Not signed in, launch the Sign In activity
-            startActivity(new Intent(this, SignInActivity.class));
-            finish();
-            return;
-        } else {
-            mUsername = mFirebaseUser.getDisplayName();
-            if (mFirebaseUser.getPhotoUrl() != null) {
-                mPhotoUrl = mFirebaseUser.getPhotoUrl().toString();
-            }
-        }
+        mPresenter = new TasksPresenter(Injection.provideUseCaseHandler(), this, Injection.provideGetMessages(this), Injection.provideSaveTask(this), Injection.provideCheckFirebaseAuth());
 
+        mPresenter.checkFirebaseAuth();
+
+    }
+
+    private void initViews() {
         // Initialize ProgressBar and RecyclerView.
         mProgressBar = (ProgressBar) findViewById(R.id.progressBar);
         mMessageRecyclerView = (RecyclerView) findViewById(R.id.messageRecyclerView);
         mLinearLayoutManager = new LinearLayoutManager(this);
         mLinearLayoutManager.setStackFromEnd(true);
         mMessageRecyclerView.setLayoutManager(mLinearLayoutManager);
-
-        initAdapter();
 
         mMessageEditText = (EditText) findViewById(R.id.messageEditText);
         mMessageEditText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(mSharedPreferences
@@ -180,9 +210,8 @@ public class MainActivity extends AppCompatActivity
                         FriendlyMessage(mMessageEditText.getText().toString(),
                         mUsername,
                         mPhotoUrl);
-                mFirebaseDatabaseReference.child(MESSAGES_CHILD)
-                        .push().setValue(friendlyMessage);
-                mMessageEditText.setText("");
+
+                mPresenter.addNewMessage(friendlyMessage);
             }
         });
 
@@ -195,68 +224,28 @@ public class MainActivity extends AppCompatActivity
         });
     }
 
-    private void initAdapter() {
-        // New child entries
-        mFirebaseDatabaseReference = FirebaseDatabase.getInstance().getReference();
+    private void initAdapter(List<FriendlyMessage> messages) {
 
-        DatabaseReference messagesRef = mFirebaseDatabaseReference.child(MESSAGES_CHILD);
+        mFirebaseAdapter = new MessagesAdapter(MainActivity.this, messages);
+        mMessageRecyclerView.setAdapter(mFirebaseAdapter);
 
-        messagesRef.addValueEventListener(new ValueEventListener() {
+        mFirebaseAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
             @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                Log.d(TAG, "Database snapshot: " + String.valueOf(dataSnapshot));
-
-                mProgressBar.setVisibility(View.GONE);
-
-                List<FriendlyMessage> messages = new ArrayList<>();
-                for (DataSnapshot messageSnapshot: dataSnapshot.getChildren()) {
-                    Log.d(TAG, "message: " + String.valueOf(messageSnapshot));
-                    FriendlyMessage friendlyMessage = messageSnapshot.getValue(FriendlyMessage.class);
-                    if (friendlyMessage != null) {
-                        friendlyMessage.setId(dataSnapshot.getKey());
-                    }
-                    messages.add(friendlyMessage);
+            public void onItemRangeInserted(int positionStart, int itemCount) {
+                super.onItemRangeInserted(positionStart, itemCount);
+                int friendlyMessageCount = mFirebaseAdapter.getItemCount();
+                int lastVisiblePosition =
+                        mLinearLayoutManager.findLastCompletelyVisibleItemPosition();
+                // If the recycler view is initially being loaded or the
+                // user is at the bottom of the list, scroll to the bottom
+                // of the list to show the newly added message.
+                if (lastVisiblePosition == -1 ||
+                        (positionStart >= (friendlyMessageCount - 1) &&
+                                lastVisiblePosition == (positionStart - 1))) {
+                    mMessageRecyclerView.scrollToPosition(positionStart);
                 }
-
-                mFirebaseAdapter = new MessagesAdapter(MainActivity.this, messages);
-                mMessageRecyclerView.setAdapter(mFirebaseAdapter);
-
-                mFirebaseAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
-                    @Override
-                    public void onItemRangeInserted(int positionStart, int itemCount) {
-                        super.onItemRangeInserted(positionStart, itemCount);
-                        int friendlyMessageCount = mFirebaseAdapter.getItemCount();
-                        int lastVisiblePosition =
-                                mLinearLayoutManager.findLastCompletelyVisibleItemPosition();
-                        // If the recycler view is initially being loaded or the
-                        // user is at the bottom of the list, scroll to the bottom
-                        // of the list to show the newly added message.
-                        if (lastVisiblePosition == -1 ||
-                                (positionStart >= (friendlyMessageCount - 1) &&
-                                        lastVisiblePosition == (positionStart - 1))) {
-                            mMessageRecyclerView.scrollToPosition(positionStart);
-                        }
-                    }
-                });
-            }
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-                // Getting Post failed, log a message
-                Log.w(TAG, "loadPost:onCancelled", databaseError.toException());
-                // ...
             }
         });
-    }
-
-    @Override
-    public void onStart() {
-        super.onStart();
-        // Check if user is signed in.
-        // TODO: Add code to check if user is signed in.
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        FirebaseUserActions.getInstance().start(getIndexApiAction());
     }
 
     @Override
@@ -286,7 +275,7 @@ public class MainActivity extends AppCompatActivity
 
         switch (item.getItemId()) {
             case R.id.sign_out_menu:
-                mFirebaseAuth.signOut();
+                //mFirebaseAuth.signOut();
                 Auth.GoogleSignInApi.signOut(mGoogleApiClient);
                 mUsername = ANONYMOUS;
                 startActivity(new Intent(this, SignInActivity.class));

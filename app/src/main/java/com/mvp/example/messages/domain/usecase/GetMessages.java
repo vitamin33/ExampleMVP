@@ -34,7 +34,7 @@ public class GetMessages extends UseCase<GetMessages.RequestValues, GetMessages.
             }
 
             @Override
-            public void onDataNotAvailable() {
+            public void onDataNotAvailableError() {
                 getUseCaseCallback().onError();
             }
         });

@@ -19,12 +19,26 @@ package com.mvp.example.data.source.remote;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.NonNull;
+import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.common.collect.Lists;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.mvp.example.data.source.TasksDataSource;
+import com.mvp.example.messages.MainActivity;
+import com.mvp.example.messages.MessagesAdapter;
 import com.mvp.example.messages.domain.model.FriendlyMessage;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -32,11 +46,22 @@ import java.util.Map;
  */
 public class TasksRemoteDataSource implements TasksDataSource {
 
+    private static final String TAG = TasksRemoteDataSource.class.getSimpleName();
+
+    public static final String MESSAGES_CHILD = "messages";
+
     private static TasksRemoteDataSource INSTANCE;
 
     private static final int SERVICE_LATENCY_IN_MILLIS = 5000;
 
     private static final Map<String, FriendlyMessage> TASKS_SERVICE_DATA;
+
+    // Firebase instance variables
+    private FirebaseAuth mFirebaseAuth;
+    private FirebaseUser mFirebaseUser;
+
+    // Firebase instance variables
+    private DatabaseReference mFirebaseDatabaseReference;
 
     static {
         TASKS_SERVICE_DATA = new LinkedHashMap<>(2);
@@ -52,33 +77,71 @@ public class TasksRemoteDataSource implements TasksDataSource {
     }
 
     // Prevent direct instantiation.
-    private TasksRemoteDataSource() {}
+    private TasksRemoteDataSource() {
+
+        // Initialize Firebase Auth
+        mFirebaseAuth = FirebaseAuth.getInstance();
+        mFirebaseUser = mFirebaseAuth.getCurrentUser();
+        // New child entries
+        mFirebaseDatabaseReference = FirebaseDatabase.getInstance().getReference();
+    }
 
     private static void addTask(String title, String description, String imageUrl) {
         FriendlyMessage newTask = new FriendlyMessage(title, description, imageUrl);
         TASKS_SERVICE_DATA.put(newTask.getId(), newTask);
     }
 
-    /**
-     * Note: {@link LoadTasksCallback#onDataNotAvailable()} is never fired. In a real remote data
-     * source implementation, this would be fired if the server can't be contacted or the server
-     * returns an error.
-     */
     @Override
     public void getMessages(final @NonNull TasksDataSource.LoadTasksCallback callback) {
-        // Simulate network by delaying the execution.
-        Handler handler = new Handler(Looper.getMainLooper());
-        handler.postDelayed(new Runnable() {
+
+        DatabaseReference messagesRef = mFirebaseDatabaseReference.child(MESSAGES_CHILD);
+
+        final Handler handler = new Handler(Looper.getMainLooper());
+
+        messagesRef.addValueEventListener(new ValueEventListener() {
             @Override
-            public void run() {
-                callback.onTasksLoaded(Lists.newArrayList(TASKS_SERVICE_DATA.values()));
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                Log.d(TAG, "Database snapshot: " + String.valueOf(dataSnapshot));
+
+
+                final List<FriendlyMessage> messages = new ArrayList<>();
+                for (DataSnapshot messageSnapshot: dataSnapshot.getChildren()) {
+                    Log.d(TAG, "message: " + String.valueOf(messageSnapshot));
+                    FriendlyMessage friendlyMessage = messageSnapshot.getValue(FriendlyMessage.class);
+                    if (friendlyMessage != null) {
+                        friendlyMessage.setId(dataSnapshot.getKey());
+                    }
+                    messages.add(friendlyMessage);
+                }
+
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        callback.onTasksLoaded(messages);
+                    }
+                });
             }
-        }, SERVICE_LATENCY_IN_MILLIS);
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+                Log.w(TAG, "loadPost:onCancelled", databaseError.toException());
+
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        callback.onDataNotAvailableError();
+                    }
+                });
+            }
+        });
     }
 
     @Override
     public void saveMessage(@NonNull FriendlyMessage task) {
-        TASKS_SERVICE_DATA.put(task.getId(), task);
+
+        mFirebaseDatabaseReference.child(MESSAGES_CHILD)
+                .push().setValue(task);
     }
 
 

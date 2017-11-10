@@ -37,7 +37,7 @@ public interface TasksDataSource {
 
         void onTasksLoaded(List<FriendlyMessage> tasks);
 
-        void onDataNotAvailable();
+        void onDataNotAvailableError();
     }
 
     interface GetTaskCallback {

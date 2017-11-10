@@ -113,7 +113,7 @@ public class TasksRepository implements TasksDataSource {
                 }
 
                 @Override
-                public void onDataNotAvailable() {
+                public void onDataNotAvailableError() {
                     getTasksFromRemoteDataSource(callback);
                 }
             });
@@ -148,8 +148,8 @@ public class TasksRepository implements TasksDataSource {
             }
 
             @Override
-            public void onDataNotAvailable() {
-                callback.onDataNotAvailable();
+            public void onDataNotAvailableError() {
+                callback.onDataNotAvailableError();
             }
         });
     }

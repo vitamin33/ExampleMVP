@@ -24,6 +24,7 @@ import com.mvp.example.UseCase;
 import com.mvp.example.UseCaseHandler;
 import com.mvp.example.messages.domain.model.FriendlyMessage;
 import com.mvp.example.messages.domain.usecase.AddMessage;
+import com.mvp.example.messages.domain.usecase.CheckFirebaseAuth;
 import com.mvp.example.messages.domain.usecase.GetMessages;
 
 import java.util.List;
@@ -36,9 +37,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
  */
 public class TasksPresenter implements TasksContract.Presenter {
 
-
     private final TasksContract.View mTasksView;
     private final GetMessages mGetTasks;
+    private final AddMessage mAddMessage;
+    private final CheckFirebaseAuth mCheckFirebaseAuth;
 
     private boolean mFirstLoad = true;
 
@@ -46,10 +48,12 @@ public class TasksPresenter implements TasksContract.Presenter {
 
     public TasksPresenter(@NonNull UseCaseHandler useCaseHandler,
                           @NonNull TasksContract.View tasksView, @NonNull GetMessages getTasks,
-                          @NonNull AddMessage completeTask) {
+                          @NonNull AddMessage addMessage, CheckFirebaseAuth checkFirebaseAuth) {
         mUseCaseHandler = checkNotNull(useCaseHandler, "usecaseHandler cannot be null");
         mTasksView = checkNotNull(tasksView, "tasksView cannot be null!");
         mGetTasks = checkNotNull(getTasks, "getTask cannot be null!");
+        mAddMessage = checkNotNull(addMessage, "addMessage cannot be null!");
+        mCheckFirebaseAuth = checkNotNull(checkFirebaseAuth, "checkFirebaseAuth cannot be null!");
 
         mTasksView.setPresenter(this);
     }
@@ -119,8 +123,57 @@ public class TasksPresenter implements TasksContract.Presenter {
     }
 
     @Override
-    public void addNewMessage() {
+    public void addNewMessage(FriendlyMessage message) {
+        mUseCaseHandler.execute(mAddMessage,
+                new AddMessage.RequestValues(message),
+                new UseCase.UseCaseCallback<AddMessage.ResponseValue>() {
+                    @Override
+                    public void onSuccess(AddMessage.ResponseValue response) {
+                        // The view may not be able to handle UI updates anymore
+                        if (!mTasksView.isActive()) {
+                            return;
+                        }
+
+                        mTasksView.showSuccessfullySavedMessage();
+                    }
+
+                    @Override
+                    public void onError() {
+                        // The view may not be able to handle UI updates anymore
+                        if (!mTasksView.isActive()) {
+                            return;
+                        }
+                        mTasksView.showAddMessageError();
+                    }
+                });
         mTasksView.showAddTask();
+    }
+
+    @Override
+    public void checkFirebaseAuth() {
+        mUseCaseHandler.execute(mCheckFirebaseAuth,
+                new CheckFirebaseAuth.RequestValues(),
+                new UseCase.UseCaseCallback<CheckFirebaseAuth.ResponseValue>() {
+                    @Override
+                    public void onSuccess(CheckFirebaseAuth.ResponseValue response) {
+                        // The view may not be able to handle UI updates anymore
+                        if (!mTasksView.isActive()) {
+                            return;
+                        }
+
+                        mTasksView.showFirebaseActiveUser(response.getUsername(), response.getPhotoUrl());
+                        mTasksView.showSuccessfullySavedMessage();
+                    }
+
+                    @Override
+                    public void onError() {
+                        // The view may not be able to handle UI updates anymore
+                        if (!mTasksView.isActive()) {
+                            return;
+                        }
+                        mTasksView.showAddMessageError();
+                    }
+                });
     }
 
 }

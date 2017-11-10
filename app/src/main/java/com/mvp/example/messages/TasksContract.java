@@ -40,9 +40,15 @@ public interface TasksContract {
 
         void showLoadingTasksError();
 
+        void showAddMessageError();
+
         void showNoTasks();
 
         void showSuccessfullySavedMessage();
+
+        void showFirebaseActiveUser(String username, String photoUrl);
+
+        void showNoActiveFirebaseUser();
 
         boolean isActive();
     }
@@ -51,6 +57,8 @@ public interface TasksContract {
 
         void loadMessages(boolean forceUpdate);
 
-        void addNewMessage();
+        void addNewMessage(FriendlyMessage message);
+
+        void checkFirebaseAuth();
     }
 }
